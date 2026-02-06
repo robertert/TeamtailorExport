@@ -10,6 +10,6 @@ const router: Router = express.Router();
 const teamtailorService = new TeamtailorService();
 const exportController = new ExportController(teamtailorService);
 
-router.get('/export/candidates', validateResource(ExportRequestSchema), exportController.exportCandidates);
+router.get('/export/candidates',validateResource(ExportRequestSchema), exportController.exportCandidatesCsv);
 
 export default router;

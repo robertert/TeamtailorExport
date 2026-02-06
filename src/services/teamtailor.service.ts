@@ -3,6 +3,7 @@ import { apiClient as axiosInstance } from '../utils/apiClient';
 import { TeamtailorResponseSchema } from '../schemas/teamtailor.schema';
 import { Candidate } from '../schemas/candidate.schema';
 import AppError from '../utils/AppError';
+import axios from 'axios';
 
 const candidateDeserializer = new Deserializer({
   keyForAttribute: 'underscore_case',
@@ -12,49 +13,65 @@ const candidateDeserializer = new Deserializer({
 });
 
 class TeamtailorService {
-  constructor(private readonly apiClient: typeof axiosInstance = axiosInstance) {}
 
-  async getCandidates(): Promise<Candidate[]> {
-    try {
-      const response = await this.apiClient.get('/candidates', {
-        params: { include: 'job-applications' },
-      });
+  private requestCanceled = false;
+  constructor(private readonly apiClient: typeof axiosInstance = axiosInstance) {
+  }
 
-      TeamtailorResponseSchema.parse(response.data);
 
-      const deserialized = await candidateDeserializer.deserialize(response.data);
+  cancelRequest(): void {
+    this.requestCanceled = true;
+  }
 
-      const candidates: Candidate[] = [];
+  async *getCandidatesPaginated(): AsyncGenerator<Candidate[]> {
+    this.requestCanceled = false;
+    let url: string | null = '/candidates';
 
-      for (const item of deserialized) {
-        const jobApps = item.job_applications ?? [];
+    while (url && !this.requestCanceled) {
+      try {
+        const response = await this.apiClient.get(url, {
+          params: url === '/candidates' ? { include: 'job-applications', 'page[size]': 30 } : undefined,
+        });
 
-        if (jobApps.length === 0) {
-          candidates.push({
-            candidate_id: item.id,
-            first_name: item.first_name ?? null,
-            last_name: item.last_name ?? null,
-            email: item.email ?? null,
-            job_application_id: null,
-            job_application_created_at: null,
-          });
-        } else {
-          for (const app of jobApps) {
+        const parsed = TeamtailorResponseSchema.parse(response.data);
+        const deserialized = await candidateDeserializer.deserialize(response.data);
+
+        const candidates: Candidate[] = [];
+        for (const item of deserialized) {
+          const jobApps = item.job_applications ?? [];
+
+          if (jobApps.length === 0) {
             candidates.push({
               candidate_id: item.id,
               first_name: item.first_name ?? null,
               last_name: item.last_name ?? null,
               email: item.email ?? null,
-              job_application_id: app.id,
-              job_application_created_at: app.created_at ?? null,
+              job_application_id: null,
+              job_application_created_at: null,
             });
+          } else {
+            for (const app of jobApps) {
+              candidates.push({
+                candidate_id: item.id,
+                first_name: item.first_name ?? null,
+                last_name: item.last_name ?? null,
+                email: item.email ?? null,
+                job_application_id: app.id,
+                job_application_created_at: app.created_at ?? null,
+              });
+            }
           }
         }
-      }
 
-      return candidates;
-    } catch (error) {
-      throw new AppError('Failed to get candidates', 500);
+        yield candidates;
+
+        url = parsed.links?.next ?? null;
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          throw new AppError('Failed to get candidates', 500);
+        }
+        throw new AppError('Failed to get candidates', 500);
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const RawJobApplicationSchema = z.object({
+export const RawJobApplicationsSchema = z.object({
   id: z.string(),
   type: z.literal('job-applications'),
   attributes: z.object({
@@ -8,8 +8,11 @@ export const RawJobApplicationSchema = z.object({
   }),
 });
 
-export type RawJobApplication = z.infer<typeof RawJobApplicationSchema>;
+export type RawJobApplications = z.infer<typeof RawJobApplicationsSchema>;
 
+
+export const RawJobsApplicationsSchema = z.array(RawJobApplicationsSchema);
+export type RawJobsApplications = z.infer<typeof RawJobsApplicationsSchema>;
 
 export const RawCandidateSchema = z.object({
   id: z.string(),

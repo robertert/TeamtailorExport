@@ -1,15 +1,31 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import TeamtailorService from '../services/teamtailor.service';
+import { getCsvHeaderRow, candidatesToCsvRows } from '../utils/csvWriter';
 
 class ExportController {
-  constructor(private readonly teamtailorService: TeamtailorService) {}
+  constructor(private readonly teamtailorService: TeamtailorService) { }
 
-  exportCandidates = async (_req: Request, res: Response): Promise<void> => {
+  exportCandidatesCsv = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const candidates = await this.teamtailorService.getCandidates();
-      res.json(candidates);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="candidates.csv"');
+
+      res.write(getCsvHeaderRow());
+
+      _req.on('close', () => {
+        console.log('Request canceled');
+        this.teamtailorService.cancelRequest();
+      });
+
+      for await (const batch of this.teamtailorService.getCandidatesPaginated()) {
+        res.write(candidatesToCsvRows(batch));
+      }
+      res.end();
     } catch (error) {
-      throw error;
+      if (res.headersSent) {
+        res.end();
+      }
+      next(error);
     }
   };
 }
