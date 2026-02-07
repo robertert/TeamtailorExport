@@ -52,20 +52,34 @@ If you plan to work on the frontend as well:
 cd frontend && npm install
 ```
 
-### Environment
+### Configuration (single source)
 
-Copy the example file and fill in your API key:
+All configuration is read from **environment variables**. One place for the whole app:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TEAMTAILOR_API_KEY` | Teamtailor API key (required) | — |
+| `PORT` | Server port | `3000` |
+
+- **Backend** reads them from `src/config/env.ts`. Validation (e.g. required API key) happens at startup.
+- **Frontend (dev only)** — the Vite dev server proxies `/api` to the backend; the proxy target is taken from the same `PORT` (see `frontend/vite.config.ts`, which uses `loadEnv` from the repo root). So one `.env` drives both backend and frontend proxy in development.
+
+**Development:** use a single `.env` file at the **repo root**:
 
 ```bash
 cp .env.example .env
 ```
 
-`.env` contents:
+Edit `.env`:
 
 ```
 TEAMTAILOR_API_KEY=your-api-key-here
-PORT=3001
+PORT=3000
 ```
+
+The backend loads `.env` only when `NODE_ENV !== 'production'` (see `src/loadEnv.ts`). The frontend dev server reads the same file for the proxy target.
+
+**Production:** there is no `.env` file. Set environment variables on the process (e.g. Docker `-e`, `docker-compose` `environment`, or Kubernetes `env`). The backend uses only `process.env` and does not load any `.env` in production.
 
 > **Do not** commit `.env` or your API key to version control. The `.gitignore` already excludes it.
 
@@ -83,12 +97,69 @@ cd frontend && npm run dev
 
 ### Running in Production
 
+Set environment variables on the process (no `.env` file is loaded in production):
+
 ```bash
-npm run build          # compiles TypeScript to dist/
-npm start              # serves the compiled backend + frontend static assets
+export TEAMTAILOR_API_KEY=your-api-key
+export PORT=3000   # optional, default 3000
+npm run build      # compiles TypeScript to dist/
+npm start          # serves the compiled backend + frontend static assets
 ```
 
 The production build serves the React SPA from `frontend/dist/` via Express static middleware, so no separate frontend server is needed.
+
+
+### Containerization (Docker)
+
+The app uses a multi-stage Dockerfile: it builds the frontend (Vite), then the backend (TypeScript), and runs a minimal production image with Node 18 Alpine. The `.env` file is not copied into the image (see `.dockerignore`); pass configuration via environment variables at runtime.
+
+**Build the image** (from the repo root):
+
+```bash
+docker build -t teamtailor-recruitment .
+```
+
+**Run the container:**
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e TEAMTAILOR_API_KEY=your-api-key-here \
+  teamtailor-recruitment
+```
+
+
+Configuration Flags:
+- e TEAMTAILOR_API_KEY=...: Required. Your API key.
+- p 3000:3000: Maps the Host Port (left) to the Container Port (right).
+- e PORT=3000: Optional. Sets the internal port the app listens on (default is 3000).
+⚠️ Important: If you change the internal PORT variable, you must update the container port mapping in the -p flag to match.
+
+Example (Running on internal port 4000):
+If you set -e PORT=4000, the app listens on port 4000 inside the container. You must map traffic to that port:
+Bash
+
+```bash
+docker run --rm -p 3000:4000 -e PORT=4000 ...
+(Host port 3000 forwards to Container port 4000)
+```
+
+**Using an env file** (do not commit it):
+
+```bash
+# .env.docker (example)
+TEAMTAILOR_API_KEY=your-api-key-here
+PORT=3000
+```
+
+```bash
+docker run --rm -p 3000:3000 --env-file .env.docker teamtailor-recruitment
+```
+
+**Health check:** once the container is running, you can call:
+
+```bash
+curl http://localhost:3000/api/health
+```
 
 ### Running Tests
 
@@ -109,7 +180,7 @@ npm run test:watch     # watch mode
 Example:
 
 ```bash
-curl -o candidates.csv http://localhost:3001/api/export/candidates
+curl -o candidates.csv http://localhost:3000/api/export/candidates
 ```
 
 The CSV contains the following columns: `candidate_id`, `first_name`, `last_name`, `email`, `job_application_id`, `job_application_created_at`.
@@ -122,6 +193,7 @@ The CSV contains the following columns: `candidate_id`, `first_name`, `last_name
 .
 ├── src/
 │   ├── server.ts                  # Express app entry point
+│   ├── loadEnv.ts                 # Loads .env in development only (production uses process env)
 │   ├── config/env.ts              # Environment variable validation
 │   ├── controllers/               # Route handlers
 │   ├── middleware/                 # Error handler, rate limiter, request ID, validation
@@ -133,6 +205,8 @@ The CSV contains the following columns: `candidate_id`, `first_name`, `last_name
 │   └── utils/                     # Helpers (API client, CSV writer, retry, AppError)
 ├── frontend/                      # React + Vite + Tailwind SPA
 ├── dist/                          # Compiled backend (generated)
+├── Dockerfile                     # Multi-stage build (frontend + backend → production)
+├── .dockerignore                  # Excludes node_modules, .env, .git, dist, etc.
 ├── .env.example                   # Environment template
 ├── tsconfig.json
 └── package.json
@@ -141,8 +215,6 @@ The CSV contains the following columns: `candidate_id`, `first_name`, `last_name
 ---
 
 ## Troubleshooting
-
-```
 
 ### HSTS / SSL issues on localhost (Safari / macOS)
 

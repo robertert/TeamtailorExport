@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { config } from './config/env';
 import path from 'path';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
@@ -9,7 +9,6 @@ import { requestIdMiddleware } from './middleware/requestId';
 import { rateLimiter } from './middleware/rateLimiter';
 import { logger } from './lib/logger';
 import { registerGracefulShutdown } from './lib/gracefulShutdown';
-import { config } from './config/env';
 
 const app: Express = express();
 
