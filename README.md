@@ -142,21 +142,15 @@ The CSV contains the following columns: `candidate_id`, `first_name`, `last_name
 
 ## Troubleshooting
 
-### Port conflicts on macOS
-
-The default `PORT` in `.env.example` is `3000`, but macOS Monterey and later use port 5000 for AirPlay Receiver, and some setups may conflict with common ports. This project recommends using **port 3001**. Set it explicitly in your `.env`:
-
-```
-PORT=3001
 ```
 
 ### HSTS / SSL issues on localhost (Safari / macOS)
 
-Safari aggressively caches HSTS headers. If you have previously visited `localhost` over HTTPS (from another project), Safari may refuse to load `http://localhost:3001` and silently redirect to HTTPS.
+Safari aggressively caches HSTS headers. If you have previously visited `localhost` over HTTPS (from another project), Safari may refuse to load `http://localhost:3000` and silently redirect to HTTPS.
 
 **Workarounds:**
 
-1. Always navigate to `http://localhost:3001` explicitly (not just `localhost:3001`).
+1. Always navigate to `http://localhost:3000` explicitly (not just `localhost:3000`).
 2. HSTS is already disabled in this project's Helmet configuration to prevent this issue.
 3. If Safari still redirects, clear the HSTS cache: _Safari > Clear History_, or delete `~/Library/Cookies/HSTS.plist` and restart Safari.
 

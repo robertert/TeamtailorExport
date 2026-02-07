@@ -24,7 +24,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`. In dev mode, requests to `/api` are proxied to the backend (`http://localhost:3001`).
+The app will be available at `http://localhost:5173`. In dev mode, requests to `/api` are proxied to the backend (`http://localhost:3000`).
 
 ### Other scripts
 

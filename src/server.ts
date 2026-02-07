@@ -17,6 +17,7 @@ app.use(helmet({
   // HSTS is disabled intentionally to avoid SSL certificate issues on localhost (especially in Safari/macOS).
   // In production (behind AWS Load Balancer) HSTS should be enabled.
   hsts: false,
+  contentSecurityPolicy: false,
 }));
 
 // Trust first proxy (AWS ALB/ELB)
