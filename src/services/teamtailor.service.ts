@@ -3,6 +3,7 @@ import { apiClient as axiosInstance } from '../utils/apiClient';
 import { Candidate } from '../schemas/candidate.schema';
 import AppError from '../utils/AppError';
 import axios, { AxiosResponse } from 'axios';
+import { logger } from '../lib/logger';
 import {
   TeamtailorResponseSchema,
   DeserializedCandidateArraySchema,
@@ -21,7 +22,9 @@ class TeamtailorService {
   }
 
   async *getCandidatesPaginated(signal?: AbortSignal): AsyncGenerator<Candidate[]> {
+    logger.info('starting candidate export');
     let url: string | null = '/candidates';
+    let page = 0;
 
     while (url) {
       if (signal?.aborted) {
@@ -65,6 +68,9 @@ class TeamtailorService {
             }
           }
         }
+
+        page++;
+        logger.debug({ page, candidatesCount: candidates.length }, 'page fetched');
 
         yield candidates;
 

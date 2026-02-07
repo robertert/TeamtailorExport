@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import AppError from '../utils/AppError';
+import { logger } from '../lib/logger';
 
 const errorHandler = (
   err: Error,
@@ -7,10 +8,6 @@ const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  console.error('Error:', err);
-
-  // Default error
-
   let statusCode: number = 500;
   let status: string = 'error';
   let message: string = err.message || 'Internal Server Error';
@@ -26,6 +23,13 @@ const errorHandler = (
   if (err.name === 'ValidationError') {
     statusCode = 400;
     message = 'Validation Error';
+  }
+
+  const logData = { err, statusCode, status };
+  if (statusCode >= 500) {
+    logger.error(logData, message);
+  } else {
+    logger.warn(logData, message);
   }
 
   // Send error response
