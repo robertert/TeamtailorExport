@@ -1,134 +1,182 @@
-# Teamtailor Recruitment Server
+# Teamtailor Candidate Export
 
-Serwer Express + Node.js + TypeScript do eksportu danych kandydatów z Teamtailor API do pliku CSV.
+A full-stack application for exporting candidate data from the [Teamtailor API](https://docs.teamtailor.com/) into CSV files. Built with **Node.js / Express 5** on the backend and **React / Vite** on the frontend, written entirely in **TypeScript**.
 
-## Wymagania
+---
 
-- Node.js (wersja 14 lub wyższa)
-- npm lub yarn
+## Technical Highlights
 
-## Instalacja
+### Streaming CSV Generation
 
-1. Zainstaluj zależności:
+The export endpoint does **not** buffer the entire dataset in memory. Instead, it pipes an `AsyncGenerator` (paginated API responses) through a `csv-stringify` stream directly into the HTTP response. Back-pressure is handled via the `drain` event, so memory usage stays constant regardless of how many candidates exist in the account.
+
+See: `src/services/teamtailor.service.ts` (async generator) and `src/controllers/exportController.ts` (stream piping).
+
+### Graceful Shutdown
+
+The server listens for `SIGINT` / `SIGTERM` signals and stops accepting new connections while allowing in-flight downloads to finish before the process exits. This prevents partially-written CSV files during deployments or container orchestration restarts.
+
+### Security Defaults
+
+- **Helmet** is applied globally with HSTS explicitly disabled in development to avoid certificate issues on `localhost` (see _Troubleshooting_ below). In production behind an AWS ALB, HSTS should be re-enabled at the load-balancer level.
+- **CORS** is restricted to `localhost` origins only (`/^http:\/\/localhost:\d+$/`).
+- **Rate limiting** (100 req / 15 min window) with `draft-7` standard headers.
+- API responses from Teamtailor are validated at runtime with **Zod** schemas before deserialization.
+
+### Structured Logging
+
+All logging is handled by **Pino** — a low-overhead, JSON-structured logger. In development, output is piped through `pino-pretty` for human-readable formatting. In production, logs are emitted as newline-delimited JSON, ready for ingestion by log aggregators (CloudWatch, Datadog, ELK, etc.). Key events — server start, shutdown signals, API retries, page fetches — are logged with contextual metadata for easy filtering and tracing.
+
+### Resilient API Client
+
+Requests to the Teamtailor API use an automatic retry mechanism with exponential backoff and jitter. `429` responses respect the `Retry-After` header. Network errors and 5xx responses are retried up to 3 times.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js** >= 18 (LTS recommended)
+- A **Teamtailor API key** (Settings > API keys in your Teamtailor account)
+
+### Installation
 
 ```bash
 npm install
 ```
 
-2. Skonfiguruj zmienne środowiskowe:
-   - Utwórz plik `.env` w katalogu głównym projektu.
-   - **Wymagana** zmienna: `TEAMTAILOR_API_KEY` (klucz API Teamtailor).
-   - Opcjonalnie: `PORT` (domyślnie 3000), `NODE_ENV`.
+If you plan to work on the frontend as well:
 
-Przykładowa zawartość `.env`:
+```bash
+cd frontend && npm install
+```
+
+### Environment
+
+Copy the example file and fill in your API key:
+
+```bash
+cp .env.example .env
+```
+
+`.env` contents:
 
 ```
 TEAMTAILOR_API_KEY=your-api-key-here
-PORT=3000
-NODE_ENV=development
+PORT=3001
 ```
 
-**Uwaga:** Nie commituj pliku `.env` ani klucza API do repozytorium.
+> **Do not** commit `.env` or your API key to version control. The `.gitignore` already excludes it.
 
-## Uruchamianie
-
-### Tryb deweloperski (z auto-przeładowaniem):
+### Running in Development
 
 ```bash
 npm run dev
 ```
 
-### Kompilacja TypeScript:
+This starts the backend server with `ts-node-dev` (auto-reload on file changes). For frontend development, start the Vite dev server separately:
 
 ```bash
-npm run build
+cd frontend && npm run dev
 ```
 
-### Tryb produkcyjny (po kompilacji):
+### Running in Production
 
 ```bash
-npm start
+npm run build          # compiles TypeScript to dist/
+npm start              # serves the compiled backend + frontend static assets
 ```
 
-### Sprawdzenie typów (bez kompilacji):
+The production build serves the React SPA from `frontend/dist/` via Express static middleware, so no separate frontend server is needed.
+
+### Running Tests
 
 ```bash
-npm run type-check
+npm test               # single run (vitest)
+npm run test:watch     # watch mode
 ```
 
-### Testy:
+---
+
+## API Endpoints
+
+| Method | Path                        | Description                        |
+|--------|-----------------------------|------------------------------------|
+| GET    | `/api/health`               | Health check (`{ status: "OK" }`)  |
+| GET    | `/api/export/candidates`    | Stream a CSV download of all candidates and their job applications |
+
+Example:
 
 ```bash
-npm test
+curl -o candidates.csv http://localhost:3001/api/export/candidates
 ```
 
-Serwer jest dostępny pod adresem: `http://localhost:3000` (lub inny port z `PORT`).
+The CSV contains the following columns: `candidate_id`, `first_name`, `last_name`, `email`, `job_application_id`, `job_application_created_at`.
 
-## Struktura projektu
+---
+
+## Project Structure
 
 ```
-TeamtailorRecrutmentServer/
-├── package.json
-├── tsconfig.json
-├── .env                    # Zmienne środowiskowe (nie w repo)
-├── .gitignore
-├── README.md
+.
 ├── src/
-│   ├── server.ts           # Punkt wejścia aplikacji
-│   ├── config/
-│   │   └── env.ts          # Konfiguracja ze zmiennych środowiskowych
-│   ├── controllers/
-│   │   └── exportController.ts
-│   ├── middleware/
-│   │   ├── errorHandler.ts
-│   │   └── validateResource.ts
-│   ├── routes/
-│   │   └── apiRoutes.ts
-│   ├── schemas/
-│   │   ├── candidate.schema.ts
-│   │   └── teamtailor.schema.ts
-│   ├── services/
-│   │   └── teamtailor.service.ts
-│   ├── types/
-│   │   └── jsonapi-serializer.d.ts
-│   └── utils/
-│       ├── apiClient.ts
-│       ├── AppError.ts
-│       └── csvWriter.ts
-└── dist/                   # Skompilowany JavaScript (generowany)
+│   ├── server.ts                  # Express app entry point
+│   ├── config/env.ts              # Environment variable validation
+│   ├── controllers/               # Route handlers
+│   ├── middleware/                 # Error handler, rate limiter, request ID, validation
+│   ├── routes/                    # API route definitions
+│   ├── schemas/                   # Zod schemas (API response & domain types)
+│   ├── services/                  # Business logic (Teamtailor API integration)
+│   ├── lib/                       # Logger (pino), graceful shutdown
+│   ├── types/                     # Ambient type declarations
+│   └── utils/                     # Helpers (API client, CSV writer, retry, AppError)
+├── frontend/                      # React + Vite + Tailwind SPA
+├── dist/                          # Compiled backend (generated)
+├── .env.example                   # Environment template
+├── tsconfig.json
+└── package.json
 ```
 
-## Endpointy API
+---
 
-### Podstawowe
+## Troubleshooting
 
-- `GET /` – informacja o serwerze i wersji
-- `GET /api/health` – status serwera (health check)
+### Port conflicts on macOS
 
-### Eksport CSV
+The default `PORT` in `.env.example` is `3000`, but macOS Monterey and later use port 5000 for AirPlay Receiver, and some setups may conflict with common ports. This project recommends using **port 3001**. Set it explicitly in your `.env`:
 
-- `GET /api/export/candidates` – pobiera plik CSV z danymi kandydatów i ich aplikacji
-
-Plik CSV zawiera kolumny: `candidate_id`, `first_name`, `last_name`, `email`, `job_application_id`, `job_application_created_at`. Dane są strumieniowane z Teamtailor API (paginacja JSON:API) i zapisywane partiami, bez ładowania całego zestawu do pamięci.
-
-Przykład pobrania (curl):
-
-```bash
-curl -N http://localhost:3000/api/export/candidates -o candidates.csv
+```
+PORT=3001
 ```
 
-## Technologie
+### HSTS / SSL issues on localhost (Safari / macOS)
 
-- **Express.js** – framework webowy
-- **TypeScript** – typowanie
-- **Zod** – walidacja (m.in. odpowiedzi API)
-- **axios** – klient HTTP do Teamtailor API
-- **jsonapi-serializer** – deserializacja odpowiedzi JSON:API
-- **dotenv** – zmienne środowiskowe
-- **cors** – CORS
-- **ts-node-dev** – dev z auto-reload
-- **Vitest** – testy jednostkowe
+Safari aggressively caches HSTS headers. If you have previously visited `localhost` over HTTPS (from another project), Safari may refuse to load `http://localhost:3001` and silently redirect to HTTPS.
 
-## Rozwój
+**Workarounds:**
 
-Nowe endpointy dodawaj w `src/routes/` i podłącz w `src/server.ts`. Kod TypeScript znajduje się w `src/`, wynik kompilacji w `dist/`.
+1. Always navigate to `http://localhost:3001` explicitly (not just `localhost:3001`).
+2. HSTS is already disabled in this project's Helmet configuration to prevent this issue.
+3. If Safari still redirects, clear the HSTS cache: _Safari > Clear History_, or delete `~/Library/Cookies/HSTS.plist` and restart Safari.
+
+---
+
+## Tech Stack
+
+| Layer      | Technology                                                    |
+|------------|---------------------------------------------------------------|
+| Runtime    | Node.js, TypeScript                                           |
+| Backend    | Express 5, Helmet, CORS, express-rate-limit                   |
+| Frontend   | React 19, Vite, Tailwind CSS                                  |
+| Validation | Zod                                                           |
+| HTTP       | Axios (with retry + exponential backoff)                      |
+| Logging    | Pino (+ pino-pretty in dev)                                   |
+| Testing    | Vitest, Supertest                                             |
+| API Format | JSON:API (jsonapi-serializer)                                 |
+
+---
+
+## License
+
+MIT

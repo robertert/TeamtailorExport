@@ -1,73 +1,88 @@
-# React + TypeScript + Vite
+# Teamtailor Recruitment — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Frontend for the Teamtailor recruitment app: export candidates to CSV with a React, TypeScript, and Vite-based UI.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Installation
 
-## React Compiler
+### Requirements
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Node.js** 18+ (20+ recommended)
+- **npm** 9+
 
-## Expanding the ESLint configuration
+### Steps
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# From the repository root
+cd frontend
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Install dependencies
+npm install
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Start the dev server (HMR)
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app will be available at `http://localhost:5173`. In dev mode, requests to `/api` are proxied to the backend (`http://localhost:3001`).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Other scripts
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Dev server (Vite HMR) |
+| `npm run build` | Production build (TypeScript + Vite) |
+| `npm run preview` | Preview the production build |
+| `npm run lint` | ESLint (TypeScript + React) |
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|------------|
+| **Framework** | React 19 |
+| **Language** | TypeScript 5.9 (strict) |
+| **Bundler / dev** | Vite 7 |
+| **Styling** | Tailwind CSS v4 (`@tailwindcss/vite`) |
+| **Icons** | lucide-react |
+| **Lint** | ESLint 9 (flat config), typescript-eslint, react-hooks, react-refresh |
+
+- **React 19** — current version with `createRoot` and StrictMode.
+- **TypeScript** — strict mode, `verbatimModuleSyntax`, no emit (type-check only).
+- **Vite 7** — ESM, fast HMR, API proxy in dev.
+- **Tailwind v4** — utility-first CSS via Vite plugin, no separate config file.
+
+---
+
+## Project structure
+
 ```
+frontend/
+├── index.html              # HTML entry point
+├── vite.config.ts          # Vite: React, Tailwind, proxy /api → backend
+├── tsconfig.json           # References to tsconfig.app and tsconfig.node
+├── tsconfig.app.json       # TypeScript for src/ (strict, ESNext)
+├── tsconfig.node.json      # TypeScript for Vite config
+├── eslint.config.js       # ESLint (flat config)
+├── package.json
+└── src/
+    ├── main.tsx            # createRoot + StrictMode, global styles import
+    ├── App.tsx             # Layout: header, main, footer, DownloadButton
+    ├── index.css           # @import "tailwindcss", keyframes (progress)
+    ├── components/
+    │   └── DownloadButton.tsx   # CSV export button + progress + states
+    └── hooks/
+        └── useCsvDownloader.ts  # Hook: streaming download, progress, errors
+```
+
+- **`main.tsx`** — mounts the app in `<div id="root">`, enables StrictMode.
+- **`App.tsx`** — page component: header, export card, footer.
+- **`DownloadButton`** — uses `useCsvDownloader`, shows loading, progress, success, and errors.
+- **`useCsvDownloader`** — streaming download (Fetch API + `ReadableStream`), byte counting, Blob/URL creation and download trigger.
+
+---
+
+## License
+
+As per the Teamtailor Recruitment project license.
