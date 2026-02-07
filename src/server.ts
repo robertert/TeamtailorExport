@@ -23,10 +23,7 @@ app.use(helmet({
 app.set('trust proxy', 1);
 
 // Middleware
-app.use(cors({
-  origin: /^http:\/\/localhost:\d+$/,
-  credentials: true,
-}));
+app.use(cors());
 app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -52,7 +49,7 @@ app.get('*path', (_req: Request, res: Response) => {
 
 app.use(errorHandler);
 
-const server = app.listen(config.PORT, () => {
+const server = app.listen(config.PORT, '0.0.0.0', () => {
   logger.info({ port: config.PORT, env: process.env.NODE_ENV ?? 'development' }, 'server started');
 });
 
