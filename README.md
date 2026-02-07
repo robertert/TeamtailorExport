@@ -1,88 +1,134 @@
 # Teamtailor Recruitment Server
 
-Basic Express + Node.js + TypeScript server for Teamtailor Recruitment application.
+Serwer Express + Node.js + TypeScript do eksportu danych kandydatów z Teamtailor API do pliku CSV.
 
-## Requirements
+## Wymagania
 
-- Node.js (version 14 or higher)
-- npm or yarn
+- Node.js (wersja 14 lub wyższa)
+- npm lub yarn
 
-## Installation
+## Instalacja
 
-1. Install dependencies:
+1. Zainstaluj zależności:
+
 ```bash
 npm install
 ```
 
-2. Configure environment variables:
-   - Create a `.env` file and adjust values as needed
-   - By default, the server runs on port 3000
-   - Example `.env` content:
-     ```
-     PORT=3000
-     NODE_ENV=development
-     ```
+2. Skonfiguruj zmienne środowiskowe:
+   - Utwórz plik `.env` w katalogu głównym projektu.
+   - **Wymagana** zmienna: `TEAMTAILOR_API_KEY` (klucz API Teamtailor).
+   - Opcjonalnie: `PORT` (domyślnie 3000), `NODE_ENV`.
 
-## Running
+Przykładowa zawartość `.env`:
 
-### Development mode (with auto-reload):
+```
+TEAMTAILOR_API_KEY=your-api-key-here
+PORT=3000
+NODE_ENV=development
+```
+
+**Uwaga:** Nie commituj pliku `.env` ani klucza API do repozytorium.
+
+## Uruchamianie
+
+### Tryb deweloperski (z auto-przeładowaniem):
+
 ```bash
 npm run dev
 ```
 
-### TypeScript compilation:
+### Kompilacja TypeScript:
+
 ```bash
 npm run build
 ```
 
-### Production mode (after compilation):
+### Tryb produkcyjny (po kompilacji):
+
 ```bash
 npm start
 ```
 
-### Type checking (without compilation):
+### Sprawdzenie typów (bez kompilacji):
+
 ```bash
 npm run type-check
 ```
 
-The server will be available at: `http://localhost:3000`
+### Testy:
 
-## Project Structure
+```bash
+npm test
+```
+
+Serwer jest dostępny pod adresem: `http://localhost:3000` (lub inny port z `PORT`).
+
+## Struktura projektu
 
 ```
 TeamtailorRecrutmentServer/
-├── package.json          # npm configuration with dependencies
-├── tsconfig.json         # TypeScript configuration
-├── .env                  # Environment variables
-├── .gitignore            # Files ignored by git
-├── README.md             # Project documentation
-├── src/                  # TypeScript source code folder
-│   ├── server.ts         # Main server file
-│   ├── routes/           # Routes folder
-│   │   └── index.ts      # Example router
-│   └── middleware/       # Middleware folder
-│       └── errorHandler.ts # Error handling
-└── dist/                 # Compiled JavaScript code (generated)
+├── package.json
+├── tsconfig.json
+├── .env                    # Zmienne środowiskowe (nie w repo)
+├── .gitignore
+├── README.md
+├── src/
+│   ├── server.ts           # Punkt wejścia aplikacji
+│   ├── config/
+│   │   └── env.ts          # Konfiguracja ze zmiennych środowiskowych
+│   ├── controllers/
+│   │   └── exportController.ts
+│   ├── middleware/
+│   │   ├── errorHandler.ts
+│   │   └── validateResource.ts
+│   ├── routes/
+│   │   └── apiRoutes.ts
+│   ├── schemas/
+│   │   ├── candidate.schema.ts
+│   │   └── teamtailor.schema.ts
+│   ├── services/
+│   │   └── teamtailor.service.ts
+│   ├── types/
+│   │   └── jsonapi-serializer.d.ts
+│   └── utils/
+│       ├── apiClient.ts
+│       ├── AppError.ts
+│       └── csvWriter.ts
+└── dist/                   # Skompilowany JavaScript (generowany)
 ```
 
-## Endpoints
+## Endpointy API
 
-### Basic
-- `GET /` - Home page with server information
-- `GET /api/health` - Server status check
+### Podstawowe
 
-### Example API endpoints
-- `GET /api/test` - Example GET endpoint
-- `POST /api/test` - Example POST endpoint
+- `GET /` – informacja o serwerze i wersji
+- `GET /api/health` – status serwera (health check)
 
-## Technologies
+### Eksport CSV
 
-- **Express.js** - Web framework for Node.js
-- **TypeScript** - Typed superset of JavaScript
-- **dotenv** - Environment variables management
-- **cors** - Cross-Origin Resource Sharing handling
-- **ts-node-dev** - Auto-reload server in development mode with TypeScript
+- `GET /api/export/candidates` – pobiera plik CSV z danymi kandydatów i ich aplikacji
 
-## Development
+Plik CSV zawiera kolumny: `candidate_id`, `first_name`, `last_name`, `email`, `job_application_id`, `job_application_created_at`. Dane są strumieniowane z Teamtailor API (paginacja JSON:API) i zapisywane partiami, bez ładowania całego zestawu do pamięci.
 
-To add new endpoints, create files in the `src/routes/` folder and import them in `src/server.ts`. All TypeScript files are located in the `src/` folder, and compiled JavaScript code is generated to the `dist/` folder.
+Przykład pobrania (curl):
+
+```bash
+curl -N http://localhost:3000/api/export/candidates -o candidates.csv
+```
+
+## Technologie
+
+- **Express.js** – framework webowy
+- **TypeScript** – typowanie
+- **Zod** – walidacja (m.in. odpowiedzi API)
+- **axios** – klient HTTP do Teamtailor API
+- **jsonapi-serializer** – deserializacja odpowiedzi JSON:API
+- **dotenv** – zmienne środowiskowe
+- **cors** – CORS
+- **ts-node-dev** – dev z auto-reload
+- **Vitest** – testy jednostkowe
+
+## Rozwój
+
+Nowe endpointy dodawaj w `src/routes/` i podłącz w `src/server.ts`. Kod TypeScript znajduje się w `src/`, wynik kompilacji w `dist/`.

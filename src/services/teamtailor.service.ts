@@ -1,9 +1,13 @@
 import { Deserializer } from 'jsonapi-serializer';
 import { apiClient as axiosInstance } from '../utils/apiClient';
-import { TeamtailorResponseSchema } from '../schemas/teamtailor.schema';
 import { Candidate } from '../schemas/candidate.schema';
 import AppError from '../utils/AppError';
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
+import {
+  TeamtailorResponseSchema,
+  DeserializedCandidateArraySchema,
+} from '../schemas/teamtailor.schema';
+import { ZodError } from 'zod';
 
 const candidateDeserializer = new Deserializer({
   keyForAttribute: 'underscore_case',
@@ -13,28 +17,27 @@ const candidateDeserializer = new Deserializer({
 });
 
 class TeamtailorService {
-
-  private requestCanceled = false;
   constructor(private readonly apiClient: typeof axiosInstance = axiosInstance) {
   }
 
-
-  cancelRequest(): void {
-    this.requestCanceled = true;
-  }
-
-  async *getCandidatesPaginated(): AsyncGenerator<Candidate[]> {
-    this.requestCanceled = false;
+  async *getCandidatesPaginated(signal?: AbortSignal): AsyncGenerator<Candidate[]> {
     let url: string | null = '/candidates';
 
-    while (url && !this.requestCanceled) {
+    while (url) {
+      if (signal?.aborted) {
+        return;
+      }
+
       try {
-        const response = await this.apiClient.get(url, {
+        const response: AxiosResponse<unknown> = await this.apiClient.get(url, {
           params: url === '/candidates' ? { include: 'job-applications', 'page[size]': 30 } : undefined,
+          signal,
         });
 
         const parsed = TeamtailorResponseSchema.parse(response.data);
-        const deserialized = await candidateDeserializer.deserialize(response.data);
+
+        const rawDeserialized = await candidateDeserializer.deserialize(parsed);
+        const deserialized = DeserializedCandidateArraySchema.parse(rawDeserialized);
 
         const candidates: Candidate[] = [];
         for (const item of deserialized) {
@@ -67,8 +70,15 @@ class TeamtailorService {
 
         url = parsed.links?.next ?? null;
       } catch (error) {
+        if (axios.isCancel(error)) {
+          return;
+        }
         if (axios.isAxiosError(error)) {
-          throw new AppError('Failed to get candidates', 500);
+          const status = error.response?.status ?? 500;
+          throw new AppError(`Teamtailor API error: ${error.message}`, status);
+        }
+        if (error instanceof ZodError) {
+          throw new AppError('Validation Error', 400, error.issues);
         }
         throw new AppError('Failed to get candidates', 500);
       }

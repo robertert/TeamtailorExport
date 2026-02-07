@@ -1,20 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodObject, ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import AppError from '../utils/AppError';
 
-export const validateResource = (schema: ZodObject<any>) => 
-  (req: Request, _: Response, next: NextFunction) => {
+type RequestInput = { body?: unknown; query?: unknown; params?: unknown };
+
+export const validateResource = (schema: z.ZodType<RequestInput>) =>
+  (req: Request, _: Response, next: NextFunction): void => {
     try {
       schema.parse({
         body: req.body,
         query: req.query,
         params: req.params,
       });
-      
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        throw new AppError('Validation Error', 400);
+        return next(new AppError('Validation Error', 400, error.issues));
       }
       next(error);
     }

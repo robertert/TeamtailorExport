@@ -2,17 +2,25 @@ import { Request, Response, NextFunction } from 'express';
 import AppError from '../utils/AppError';
 
 const errorHandler = (
-  err: AppError,
-  req: Request,
+  err: Error,
+  _req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void => {
   console.error('Error:', err);
 
   // Default error
-  let statusCode: number = err.statusCode || 500;
-  let status: string = err.status || 'error';
+
+  let statusCode: number = 500;
+  let status: string = 'error';
   let message: string = err.message || 'Internal Server Error';
+  let details: object = {};
+
+  if (err instanceof AppError) {
+    statusCode = err.statusCode;
+    status = err.status;
+    details = err.details ?? {};
+  }
 
   // Validation errors
   if (err.name === 'ValidationError') {
@@ -25,6 +33,7 @@ const errorHandler = (
     error: {
       message: message,
       status: status,
+      ...details,
       ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     }
   });
