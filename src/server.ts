@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import path from 'path';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -11,7 +12,10 @@ import { config } from './config/env';
 
 const app: Express = express();
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+  hsts: false,
+}));
 
 // Trust first proxy (AWS ALB/ELB)
 app.set('trust proxy', 1);
@@ -24,13 +28,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(requestIdMiddleware);
 
 // Routes
-app.get('/', (_req: Request, res: Response) => {
-  res.json({
-    message: 'Welcome to Teamtailor Recruitment Server',
-    version: '1.0.0'
-  });
-});
-
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'OK',
@@ -40,10 +37,12 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 app.use('/api', routes);
 
-// 404 handler
-app.use((req: Request, res: Response) => {
-  logger.warn({ method: req.method, url: req.originalUrl }, 'route not found');
-  res.status(404).json({ error: { message: 'Not Found' } });
+// Serve frontend static assets
+app.use(express.static(path.join(__dirname, '..', 'frontend', 'dist')));
+
+// SPA catch-all — serves index.html for non-API routes
+app.get('*path', (_req: Request, res: Response) => {
+  res.sendFile(path.join(__dirname, '..', 'frontend', 'dist', 'index.html'));
 });
 
 app.use(errorHandler);
