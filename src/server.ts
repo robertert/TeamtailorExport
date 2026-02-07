@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import routes from './routes/apiRoutes';
 import errorHandler from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
@@ -9,6 +10,8 @@ import { logger } from './lib/logger';
 import { config } from './config/env';
 
 const app: Express = express();
+
+app.use(helmet());
 
 // Trust first proxy (AWS ALB/ELB)
 app.set('trust proxy', 1);

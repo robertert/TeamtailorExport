@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../../utils/apiClient', () => ({
-  apiClient: { get: vi.fn() },
+vi.mock('../../utils/apiClient', () => ({ apiClient: {} }));
+vi.mock('../../utils/fetchWithRetry', () => ({
+  fetchWithRetry: vi.fn(),
 }));
 
 import TeamtailorService from '../teamtailor.service';
 import AppError from '../../utils/AppError';
+import { AxiosError } from 'axios';
+import { fetchWithRetry } from '../../utils/fetchWithRetry';
 
 function makeJsonApiResponse(
   candidates: Array<{
@@ -29,10 +32,10 @@ function makeJsonApiResponse(
       },
       relationships: c.jobAppIds
         ? {
-            'job-applications': {
-              data: c.jobAppIds.map(id => ({ id, type: 'job-applications' as const })),
-            },
-          }
+          'job-applications': {
+            data: c.jobAppIds.map(id => ({ id, type: 'job-applications' as const })),
+          },
+        }
         : undefined,
     })),
     included: included.map(app => ({
@@ -44,10 +47,6 @@ function makeJsonApiResponse(
   };
 }
 
-function createMockClient() {
-  return { get: vi.fn() } as unknown as { get: ReturnType<typeof vi.fn> };
-}
-
 async function collectAll<T>(gen: AsyncGenerator<T>): Promise<T[]> {
   const results: T[] = [];
   for await (const item of gen) {
@@ -57,16 +56,18 @@ async function collectAll<T>(gen: AsyncGenerator<T>): Promise<T[]> {
 }
 
 describe('TeamtailorService', () => {
-  let mockClient: { get: ReturnType<typeof vi.fn> };
+  const mockApiClient = {};
   let service: TeamtailorService;
+  let mockFetchWithRetry: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    mockClient = createMockClient();
-    service = new TeamtailorService(mockClient as never);
+    mockFetchWithRetry = vi.mocked(fetchWithRetry);
+    mockFetchWithRetry.mockReset();
+    service = new TeamtailorService(mockApiClient as never);
   });
 
   it('yields a single batch when there is no next link', async () => {
-    mockClient.get.mockResolvedValueOnce({
+    mockFetchWithRetry.mockResolvedValueOnce({
       data: makeJsonApiResponse(
         [{ id: '1', firstName: 'Jan', lastName: 'Kowalski', email: 'jan@example.com' }],
         [],
@@ -79,11 +80,11 @@ describe('TeamtailorService', () => {
     expect(batches[0]).toHaveLength(1);
     expect(batches[0][0].candidate_id).toBe('1');
     expect(batches[0][0].first_name).toBe('Jan');
-    expect(mockClient.get).toHaveBeenCalledTimes(1);
+    expect(mockFetchWithRetry).toHaveBeenCalledTimes(1);
   });
 
   it('follows pagination across multiple pages', async () => {
-    mockClient.get
+    mockFetchWithRetry
       .mockResolvedValueOnce({
         data: makeJsonApiResponse(
           [{ id: '1', firstName: 'Jan' }],
@@ -100,11 +101,11 @@ describe('TeamtailorService', () => {
     expect(batches).toHaveLength(2);
     expect(batches[0][0].candidate_id).toBe('1');
     expect(batches[1][0].candidate_id).toBe('2');
-    expect(mockClient.get).toHaveBeenCalledTimes(2);
+    expect(mockFetchWithRetry).toHaveBeenCalledTimes(2);
   });
 
   it('produces one row with null app fields when candidate has no job applications', async () => {
-    mockClient.get.mockResolvedValueOnce({
+    mockFetchWithRetry.mockResolvedValueOnce({
       data: makeJsonApiResponse([{ id: '1', firstName: 'Jan' }], []),
     });
 
@@ -116,7 +117,7 @@ describe('TeamtailorService', () => {
   });
 
   it('produces multiple rows when candidate has multiple job applications', async () => {
-    mockClient.get.mockResolvedValueOnce({
+    mockFetchWithRetry.mockResolvedValueOnce({
       data: makeJsonApiResponse(
         [{ id: '1', firstName: 'Jan', jobAppIds: ['app-1', 'app-2'] }],
         [
@@ -135,6 +136,21 @@ describe('TeamtailorService', () => {
     expect(batches[0][1].job_application_created_at).toBe('2024-02-20');
   });
 
+  it('calls fetchWithRetry with apiClient, url, params and signal', async () => {
+    mockFetchWithRetry.mockResolvedValueOnce({
+      data: makeJsonApiResponse([{ id: '1', firstName: 'Jan' }], []),
+    });
+
+    await collectAll(service.getCandidatesPaginated());
+
+    expect(mockFetchWithRetry).toHaveBeenCalledWith(
+      mockApiClient,
+      '/candidates',
+      { include: 'job-applications', 'page[size]': 30 },
+      undefined,
+    );
+  });
+
   it('stops without yielding when AbortSignal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();
@@ -144,11 +160,10 @@ describe('TeamtailorService', () => {
     );
 
     expect(batches).toHaveLength(0);
-    expect(mockClient.get).not.toHaveBeenCalled();
+    expect(mockFetchWithRetry).not.toHaveBeenCalled();
   });
 
-  it('throws AppError on axios error with correct status', async () => {
-    const { AxiosError } = await import('axios');
+  it('throws AppError when fetchWithRetry throws AxiosError', async () => {
     const axiosErr = new AxiosError(
       'Too Many Requests',
       'ERR_BAD_REQUEST',
@@ -156,8 +171,7 @@ describe('TeamtailorService', () => {
       undefined,
       { status: 429, data: {}, statusText: 'Too Many Requests', headers: {}, config: {} } as never,
     );
-
-    mockClient.get.mockRejectedValueOnce(axiosErr);
+    mockFetchWithRetry.mockRejectedValueOnce(axiosErr);
 
     try {
       await collectAll(service.getCandidatesPaginated());
@@ -169,7 +183,7 @@ describe('TeamtailorService', () => {
   });
 
   it('throws AppError on malformed response (Zod validation failure)', async () => {
-    mockClient.get.mockResolvedValueOnce({
+    mockFetchWithRetry.mockResolvedValueOnce({
       data: { invalid: 'not a valid response' },
     });
 

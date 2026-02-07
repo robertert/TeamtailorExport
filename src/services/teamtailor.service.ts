@@ -1,8 +1,9 @@
 import { Deserializer } from 'jsonapi-serializer';
 import { apiClient as axiosInstance } from '../utils/apiClient';
+import { fetchWithRetry } from '../utils/fetchWithRetry';
 import { Candidate } from '../schemas/candidate.schema';
 import AppError from '../utils/AppError';
-import axios, { AxiosResponse } from 'axios';
+import axios from 'axios';
 import { logger } from '../lib/logger';
 import {
   TeamtailorResponseSchema,
@@ -32,10 +33,12 @@ class TeamtailorService {
       }
 
       try {
-        const response: AxiosResponse<unknown> = await this.apiClient.get(url, {
-          params: url === '/candidates' ? { include: 'job-applications', 'page[size]': 30 } : undefined,
+        const response = await fetchWithRetry(
+          this.apiClient,
+          url,
+          url === '/candidates' ? { include: 'job-applications', 'page[size]': 30 } : undefined,
           signal,
-        });
+        );
 
         const parsed = TeamtailorResponseSchema.parse(response.data);
 
