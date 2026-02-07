@@ -4,5 +4,5 @@ if (!process.env.TEAMTAILOR_API_KEY) {
 
 export const config = {
   TEAMTAILOR_API_KEY: process.env.TEAMTAILOR_API_KEY,
-  PORT: parseInt(process.env.PORT || '3000', 10),
+  PORT: parseInt(process.env.PORT || '3001', 10),
 };
