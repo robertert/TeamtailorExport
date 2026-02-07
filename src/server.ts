@@ -21,8 +21,10 @@ app.use(helmet({
 app.set('trust proxy', 1);
 
 // Middleware
-app.use(cors());
-app.use(rateLimiter);
+app.use(cors({
+  origin: /^http:\/\/localhost:\d+$/,
+  credentials: true,
+})); app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestIdMiddleware);
