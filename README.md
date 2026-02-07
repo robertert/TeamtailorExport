@@ -19,7 +19,7 @@ The server listens for `SIGINT` / `SIGTERM` signals and stops accepting new conn
 ### Security Defaults
 
 - **Helmet** is applied globally with HSTS explicitly disabled in development to avoid certificate issues on `localhost` (see _Troubleshooting_ below). In production behind an AWS ALB, HSTS should be re-enabled at the load-balancer level.
-- **CORS** is restricted to `localhost` origins only (`/^http:\/\/localhost:\d+$/`).
+- **CORS** /api is restricted to `localhost` origins only (`/^http:\/\/localhost:\d+$/`).
 - **Rate limiting** (100 req / 15 min window) with `draft-7` standard headers.
 - API responses from Teamtailor are validated at runtime with **Zod** schemas before deserialization.
 
@@ -30,6 +30,46 @@ All logging is handled by **Pino** — a low-overhead, JSON-structured logger. I
 ### Resilient API Client
 
 Requests to the Teamtailor API use an automatic retry mechanism with exponential backoff and jitter. `429` responses respect the `Retry-After` header. Network errors and 5xx responses are retried up to 3 times.
+
+
+---
+
+## CI/CD
+
+The project uses **GitHub Actions** for continuous integration and deployment. The entire pipeline is defined in a single workflow (`.github/workflows/ci.yml`).
+
+### Pipeline Overview
+
+```
+push / PR to main
+  ├── Backend  (type-check, test, build)   ─┐
+  ├── Frontend (lint, build)                ├──> Build & Push to AWS ECR
+  └────────────────────────────────────────-┘
+```
+
+- **Backend** job: installs dependencies, runs TypeScript type checking, Vitest tests, and compiles the project.
+- **Frontend** job: installs dependencies, runs ESLint, and builds the Vite production bundle.
+- **Build & Push** job: runs only after both Backend and Frontend succeed. Builds the Docker image and pushes it to **Amazon ECR** on pushes to `main`.
+
+### Deployment
+
+The application is deployed on **AWS App Runner** and is available at:
+
+**https://iskdmghb3w.eu-central-1.awsapprunner.com**
+
+App Runner automatically picks up new images pushed to ECR and deploys them, providing zero-downtime rolling deployments.
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | IAM access key with ECR push permissions |
+| `AWS_SECRET_ACCESS_KEY` | Corresponding IAM secret key |
+
+### Concurrency
+
+The workflow uses `cancel-in-progress: true`, so pushing a new commit to a branch automatically cancels any in-progress run for that branch, saving CI minutes and providing faster feedback.
+
 
 ---
 
@@ -111,7 +151,7 @@ The production build serves the React SPA from `frontend/dist/` via Express stat
 
 ### Containerization (Docker)
 
-The app uses a multi-stage Dockerfile: it builds the frontend (Vite), then the backend (TypeScript), and runs a minimal production image with Node 18 Alpine. The `.env` file is not copied into the image (see `.dockerignore`); pass configuration via environment variables at runtime.
+The app uses a multi-stage Dockerfile: it builds the frontend (Vite), then the backend (TypeScript), and runs a minimal production image with Node 20 Alpine. The `.env` file is not copied into the image (see `.dockerignore`); pass configuration via environment variables at runtime.
 
 **Build the image** (from the repo root):
 
@@ -240,6 +280,9 @@ Safari aggressively caches HSTS headers. If you have previously visited `localho
 | Logging    | Pino (+ pino-pretty in dev)                                   |
 | Testing    | Vitest, Supertest                                             |
 | API Format | JSON:API (jsonapi-serializer)                                 |
+| CI/CD      | GitHub Actions                                                |
+| Container  | Docker (multi-stage, Node 20 Alpine)                          |
+| Cloud      | AWS App Runner, Amazon ECR                                    |
 
 ---
 
