@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import TeamtailorService from '../services/teamtailor.service';
-import { getCsvHeaderRow, candidatesToCsvRows } from '../utils/csvWriter';
+import { createCsvStringifier } from '../utils/csvWriter';
 
 class ExportController {
   constructor(private readonly teamtailorService: TeamtailorService) { }
@@ -12,16 +12,20 @@ class ExportController {
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="candidates.csv"');
 
-      res.write(getCsvHeaderRow());
+      req.on('close', () => abortController.abort());
 
-      req.on('close', () => {
-        abortController.abort();
-      });
+      const csvStream = createCsvStringifier();
+      csvStream.pipe(res);
 
       for await (const batch of this.teamtailorService.getCandidatesPaginated(abortController.signal)) {
-        res.write(candidatesToCsvRows(batch));
+        for (const candidate of batch) {
+          if (!csvStream.write(candidate)) {
+            await new Promise<void>(resolve => csvStream.once('drain', resolve));
+          }
+        }
       }
-      res.end();
+
+      csvStream.end();
     } catch (error) {
       if (res.headersSent) {
         res.end();
