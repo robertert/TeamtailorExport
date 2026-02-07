@@ -2,14 +2,12 @@ import { Deserializer } from 'jsonapi-serializer';
 import { apiClient as axiosInstance } from '../utils/apiClient';
 import { fetchWithRetry } from '../utils/fetchWithRetry';
 import { Candidate } from '../schemas/candidate.schema';
-import AppError from '../utils/AppError';
 import axios from 'axios';
 import { logger } from '../lib/logger';
 import {
   TeamtailorResponseSchema,
   DeserializedCandidateArraySchema,
 } from '../schemas/teamtailor.schema';
-import { ZodError } from 'zod';
 
 const candidateDeserializer = new Deserializer({
   keyForAttribute: 'underscore_case',
@@ -82,14 +80,7 @@ class TeamtailorService {
         if (axios.isCancel(error)) {
           return;
         }
-        if (axios.isAxiosError(error)) {
-          const status = error.response?.status ?? 500;
-          throw new AppError(`Teamtailor API error: ${error.message}`, status);
-        }
-        if (error instanceof ZodError) {
-          throw new AppError('Validation Error', 400, error.issues);
-        }
-        throw new AppError('Failed to get candidates', 500);
+        throw error;
       }
     }
   }

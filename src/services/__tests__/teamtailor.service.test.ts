@@ -6,8 +6,8 @@ vi.mock('../../utils/fetchWithRetry', () => ({
 }));
 
 import TeamtailorService from '../teamtailor.service';
-import AppError from '../../utils/AppError';
-import { AxiosError } from 'axios';
+import axios, { AxiosError } from 'axios';
+import { ZodError } from 'zod';
 import { fetchWithRetry } from '../../utils/fetchWithRetry';
 
 function makeJsonApiResponse(
@@ -163,7 +163,7 @@ describe('TeamtailorService', () => {
     expect(mockFetchWithRetry).not.toHaveBeenCalled();
   });
 
-  it('throws AppError when fetchWithRetry throws AxiosError', async () => {
+  it('throws AxiosError when fetchWithRetry throws AxiosError', async () => {
     const axiosErr = new AxiosError(
       'Too Many Requests',
       'ERR_BAD_REQUEST',
@@ -177,12 +177,12 @@ describe('TeamtailorService', () => {
       await collectAll(service.getCandidatesPaginated());
       expect.unreachable('Should have thrown');
     } catch (err) {
-      expect(err).toBeInstanceOf(AppError);
-      expect((err as AppError).statusCode).toBe(429);
+      expect(axios.isAxiosError(err)).toBe(true);
+      expect((err as AxiosError).response?.status).toBe(429);
     }
   });
 
-  it('throws AppError on malformed response (Zod validation failure)', async () => {
+  it('throws ZodError on malformed response (Zod validation failure)', async () => {
     mockFetchWithRetry.mockResolvedValueOnce({
       data: { invalid: 'not a valid response' },
     });
@@ -191,9 +191,7 @@ describe('TeamtailorService', () => {
       await collectAll(service.getCandidatesPaginated());
       expect.unreachable('Should have thrown');
     } catch (err) {
-      expect(err).toBeInstanceOf(AppError);
-      expect((err as AppError).statusCode).toBe(400);
-      expect((err as AppError).message).toBe('Validation Error');
+      expect(err).toBeInstanceOf(ZodError);
     }
   });
 });
