@@ -8,12 +8,14 @@ import errorHandler from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
 import { rateLimiter } from './middleware/rateLimiter';
 import { logger } from './lib/logger';
+import { registerGracefulShutdown } from './lib/gracefulShutdown';
 import { config } from './config/env';
 
 const app: Express = express();
 
 app.use(helmet({
-  contentSecurityPolicy: false,
+  // HSTS is disabled intentionally to avoid SSL certificate issues on localhost (especially in Safari/macOS).
+  // In production (behind AWS Load Balancer) HSTS should be enabled.
   hsts: false,
 }));
 
@@ -24,7 +26,8 @@ app.set('trust proxy', 1);
 app.use(cors({
   origin: /^http:\/\/localhost:\d+$/,
   credentials: true,
-})); app.use(rateLimiter);
+}));
+app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestIdMiddleware);
@@ -49,8 +52,10 @@ app.get('*path', (_req: Request, res: Response) => {
 
 app.use(errorHandler);
 
-app.listen(config.PORT, () => {
+const server = app.listen(config.PORT, () => {
   logger.info({ port: config.PORT, env: process.env.NODE_ENV ?? 'development' }, 'server started');
 });
+
+registerGracefulShutdown(server);
 
 export default app;
