@@ -4,13 +4,18 @@ import cors from 'cors';
 import routes from './routes/apiRoutes';
 import errorHandler from './middleware/errorHandler';
 import { requestIdMiddleware } from './middleware/requestId';
+import { rateLimiter } from './middleware/rateLimiter';
 import { logger } from './lib/logger';
 import { config } from './config/env';
 
 const app: Express = express();
 
+// Trust first proxy (AWS ALB/ELB)
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
+app.use(rateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(requestIdMiddleware);
